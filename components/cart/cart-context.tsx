@@ -27,7 +27,7 @@ function updateCartItem(item: CartItem, updateType: UpdateType): CartItem | null
   const newQuantity = updateType === 'plus' ? item.quantity + 1 : item.quantity - 1;
   if (newQuantity === 0) return null;
 
-  const singleItemAmount = Number(item.cost.totalAmount.amount) / item.quantity;
+  const singleItemAmount = Number(item.cost.totalAmount.value) / item.quantity;
   const newTotalAmount = calculateItemCost(newQuantity, singleItemAmount.toString());
 
   return {
@@ -37,7 +37,7 @@ function updateCartItem(item: CartItem, updateType: UpdateType): CartItem | null
       ...item.cost,
       totalAmount: {
         ...item.cost.totalAmount,
-        amount: newTotalAmount
+        value: newTotalAmount
       }
     }
   };
@@ -49,14 +49,14 @@ function createOrUpdateCartItem(
   product: Product
 ): CartItem {
   const quantity = existingItem ? existingItem.quantity + 1 : 1;
-  const totalAmount = calculateItemCost(quantity, variant.price.amount);
+  const totalAmount = calculateItemCost(quantity, variant.price.value);
 
   return {
     id: existingItem?.id,
     quantity,
     cost: {
       totalAmount: {
-        amount: totalAmount,
+        value: totalAmount,
         currencyCode: variant.price.currencyCode
       }
     },
@@ -76,15 +76,15 @@ function createOrUpdateCartItem(
 
 function updateCartTotals(lines: CartItem[]): Pick<Cart, 'totalQuantity' | 'cost'> {
   const totalQuantity = lines.reduce((sum, item) => sum + item.quantity, 0);
-  const totalAmount = lines.reduce((sum, item) => sum + Number(item.cost.totalAmount.amount), 0);
+  const totalAmount = lines.reduce((sum, item) => sum + Number(item.cost.totalAmount.value), 0);
   const currencyCode = lines[0]?.cost.totalAmount.currencyCode ?? 'USD';
 
   return {
     totalQuantity,
     cost: {
-      subtotalAmount: { amount: totalAmount.toString(), currencyCode },
-      totalAmount: { amount: totalAmount.toString(), currencyCode },
-      totalTaxAmount: { amount: '0', currencyCode }
+      subtotalAmount: { value: totalAmount.toString(), currencyCode },
+      totalAmount: { value: totalAmount.toString(), currencyCode },
+      totalTaxAmount: { value: '0', currencyCode }
     }
   };
 }
@@ -94,11 +94,11 @@ function createEmptyCart(): Cart {
     id: undefined,
     checkoutUrl: '',
     totalQuantity: 0,
-    lines: [],
+    items: [],
     cost: {
-      subtotalAmount: { amount: '0', currencyCode: 'USD' },
-      totalAmount: { amount: '0', currencyCode: 'USD' },
-      totalTaxAmount: { amount: '0', currencyCode: 'USD' }
+      subtotalAmount: { value: '0', currencyCode: 'USD' },
+      totalAmount: { value: '0', currencyCode: 'USD' },
+      totalTaxAmount: { value: '0', currencyCode: 'USD' }
     }
   };
 }
@@ -109,7 +109,7 @@ function cartReducer(state: Cart | undefined, action: CartAction): Cart {
   switch (action.type) {
     case 'UPDATE_ITEM': {
       const { merchandiseId, updateType } = action.payload;
-      const updatedLines = currentCart.lines
+      const updatedLines = currentCart.items
         .map((item) =>
           item.merchandise.id === merchandiseId ? updateCartItem(item, updateType) : item
         )
@@ -118,27 +118,27 @@ function cartReducer(state: Cart | undefined, action: CartAction): Cart {
       if (updatedLines.length === 0) {
         return {
           ...currentCart,
-          lines: [],
+          items: [],
           totalQuantity: 0,
           cost: {
             ...currentCart.cost,
-            totalAmount: { ...currentCart.cost.totalAmount, amount: '0' }
+            totalAmount: { ...currentCart.cost.totalAmount, value: '0' }
           }
         };
       }
 
-      return { ...currentCart, ...updateCartTotals(updatedLines), lines: updatedLines };
+      return { ...currentCart, ...updateCartTotals(updatedLines), items: updatedLines };
     }
     case 'ADD_ITEM': {
       const { variant, product } = action.payload;
-      const existingItem = currentCart.lines.find((item) => item.merchandise.id === variant.id);
+      const existingItem = currentCart.items.find((item) => item.merchandise.id === variant.id);
       const updatedItem = createOrUpdateCartItem(existingItem, variant, product);
 
       const updatedLines = existingItem
-        ? currentCart.lines.map((item) => (item.merchandise.id === variant.id ? updatedItem : item))
-        : [...currentCart.lines, updatedItem];
+        ? currentCart.items.map((item) => (item.merchandise.id === variant.id ? updatedItem : item))
+        : [...currentCart.items, updatedItem];
 
-      return { ...currentCart, ...updateCartTotals(updatedLines), lines: updatedLines };
+      return { ...currentCart, ...updateCartTotals(updatedLines), items: updatedLines };
     }
     default:
       return currentCart;
@@ -155,11 +155,14 @@ export function CartProvider({
   const initialCart = use(cartPromise);
   const [optimisticCart, updateOptimisticCart] = useOptimistic(initialCart, cartReducer);
 
+  console.warn('OPTI', optimisticCart);
+
   const updateCartItem = (merchandiseId: string, updateType: UpdateType) => {
     updateOptimisticCart({ type: 'UPDATE_ITEM', payload: { merchandiseId, updateType } });
   };
 
   const addCartItem = (variant: ProductVariant, product: Product) => {
+    console.warn(variant, product);
     updateOptimisticCart({ type: 'ADD_ITEM', payload: { variant, product } });
   };
 

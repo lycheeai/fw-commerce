@@ -6,8 +6,7 @@ import Footer from 'components/layout/footer';
 import { Gallery } from 'components/product/gallery';
 import { ProductProvider } from 'components/product/product-context';
 import { ProductDescription } from 'components/product/product-description';
-import { HIDDEN_PRODUCT_TAG } from 'lib/constants';
-import { getProduct, getProductRecommendations } from 'lib/shopify';
+import { getProduct } from 'lib/shopify';
 import { Image } from 'lib/shopify/types';
 import Link from 'next/link';
 import { Suspense } from 'react';
@@ -21,18 +20,20 @@ export async function generateMetadata({
 
   if (!product) return notFound();
 
-  const { url, width, height, altText: alt } = product.featuredImage || {};
-  const indexable = !product.tags.includes(HIDDEN_PRODUCT_TAG);
+  const featuredImage = product.images[0]
+
+  const { url, width, height, altText: alt } = featuredImage || {};
+  // const indexable = !product.tags.includes(HIDDEN_PRODUCT_TAG);
 
   return {
-    title: product.seo.title || product.title,
-    description: product.seo.description || product.description,
+    title: product.name,
+    description: product.description,
     robots: {
-      index: indexable,
-      follow: indexable,
+      index: true,
+      follow: true,
       googleBot: {
-        index: indexable,
-        follow: indexable
+        index: true,
+        follow: true
       }
     },
     openGraph: url
@@ -55,31 +56,32 @@ export default async function ProductPage({ params }: { params: { handle: string
 
   if (!product) return notFound();
 
-  const productJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.title,
-    description: product.description,
-    image: product.featuredImage.url,
-    offers: {
-      '@type': 'AggregateOffer',
-      availability: product.availableForSale
-        ? 'https://schema.org/InStock'
-        : 'https://schema.org/OutOfStock',
-      priceCurrency: product.priceRange.minVariantPrice.currencyCode,
-      highPrice: product.priceRange.maxVariantPrice.amount,
-      lowPrice: product.priceRange.minVariantPrice.amount
-    }
-  };
+  // const productJsonLd = {
+  //   '@context': 'https://schema.org',
+  //   '@type': 'Product',
+  //   name: product.name,
+  //   description: product.description,
+  //   image: product.images.map((image) => image.url)[0],
+  //   offers: {
+  //     '@type': 'AggregateOffer',
+  //     availability: true,
+  //     // availability: product.availableForSale
+  //     //   ? 'https://schema.org/InStock'
+  //     //   : 'https://schema.org/OutOfStock',
+  //     priceCurrency: product.priceRange.minVariantPrice.currencyCode,
+  //     highPrice: product.priceRange.maxVariantPrice.amount,
+  //     lowPrice: product.priceRange.minVariantPrice.amount
+  //   }
+  // };
 
   return (
     <ProductProvider>
-      <script
+      {/* <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(productJsonLd)
         }}
-      />
+      /> */}
       <div className="mx-auto max-w-screen-2xl px-4">
         <div className="flex flex-col rounded-lg border border-neutral-200 bg-white p-8 md:p-12 lg:flex-row lg:gap-8 dark:border-neutral-800 dark:bg-black">
           <div className="h-full w-full basis-full lg:basis-4/6">
@@ -111,7 +113,8 @@ export default async function ProductPage({ params }: { params: { handle: string
 }
 
 async function RelatedProducts({ id }: { id: string }) {
-  const relatedProducts = await getProductRecommendations(id);
+  const relatedProducts = []
+  // await getProductRecommendations(id);
 
   if (!relatedProducts.length) return null;
 

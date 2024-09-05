@@ -14,7 +14,7 @@ export async function addItem(prevState: any, selectedVariantId: string | undefi
   }
 
   try {
-    await addToCart(cartId, [{ merchandiseId: selectedVariantId, quantity: 1 }]);
+    await addToCart(cartId, [{ variantId: selectedVariantId, quantity: 1 }]);
     revalidateTag(TAGS.cart);
   } catch (e) {
     return 'Error adding item to cart';
@@ -35,7 +35,7 @@ export async function removeItem(prevState: any, merchandiseId: string) {
       return 'Error fetching cart';
     }
 
-    const lineItem = cart.lines.find((line) => line.merchandise.id === merchandiseId);
+    const lineItem = cart.items.find((line) => line.merchandise.id === merchandiseId);
 
     if (lineItem && lineItem.id) {
       await removeFromCart(cartId, [lineItem.id]);
@@ -51,7 +51,7 @@ export async function removeItem(prevState: any, merchandiseId: string) {
 export async function updateItemQuantity(
   prevState: any,
   payload: {
-    merchandiseId: string;
+    variantId: string;
     quantity: number;
   }
 ) {
@@ -61,7 +61,7 @@ export async function updateItemQuantity(
     return 'Missing cart ID';
   }
 
-  const { merchandiseId, quantity } = payload;
+  const { variantId, quantity } = payload;
 
   try {
     const cart = await getCart(cartId);
@@ -70,7 +70,8 @@ export async function updateItemQuantity(
       return 'Error fetching cart';
     }
 
-    const lineItem = cart.lines.find((line) => line.merchandise.id === merchandiseId);
+    const lineItem = cart.items.find((line) => line.merchandise.id === variantId);
+    console.warn('UPDATING', lineItem, variantId, quantity);
 
     if (lineItem && lineItem.id) {
       if (quantity === 0) {
@@ -78,15 +79,14 @@ export async function updateItemQuantity(
       } else {
         await updateCart(cartId, [
           {
-            id: lineItem.id,
-            merchandiseId,
+            variantId,
             quantity
           }
         ]);
       }
     } else if (quantity > 0) {
       // If the item doesn't exist in the cart and quantity > 0, add it
-      await addToCart(cartId, [{ merchandiseId, quantity }]);
+      await addToCart(cartId, [{ variantId, quantity }]);
     }
 
     revalidateTag(TAGS.cart);

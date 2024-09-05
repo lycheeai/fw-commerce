@@ -4,7 +4,7 @@ import { GridTileImage } from './grid/tile';
 
 export async function Carousel() {
   // Collections that start with `hidden-*` are hidden from the search page.
-  const products = await getCollectionProducts({ collection: 'hidden-homepage-carousel' });
+  const products = await getCollectionProducts({ collection: 'col_eB6V0DF-ScWynzelI1ekhg' });
 
   if (!products?.length) return null;
 
@@ -16,18 +16,18 @@ export async function Carousel() {
       <ul className="flex animate-carousel gap-4">
         {carouselProducts.map((product, i) => (
           <li
-            key={`${product.handle}${i}`}
+            key={`${product.slug}${i}`}
             className="relative aspect-square h-[30vh] max-h-[275px] w-2/3 max-w-[475px] flex-none md:w-1/3"
           >
-            <Link href={`/product/${product.handle}`} className="relative h-full w-full">
+            <Link href={`/product/${product.slug}`} className="relative h-full w-full">
               <GridTileImage
-                alt={product.title}
+                alt={product.name}
                 label={{
-                  title: product.title,
-                  amount: product.priceRange.maxVariantPrice.amount,
-                  currencyCode: product.priceRange.maxVariantPrice.currencyCode
+                  title: product.name,
+                  amount: (Math.max(0, ...product.variants.map((i) => (i.price.value)))).toString(),
+                  currencyCode: product.variants[0]?.price.currencyCode || 'USD'
                 }}
-                src={product.featuredImage?.url}
+                src={product.images[0]?.url || ''}
                 fill
                 sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
               />
