@@ -1,53 +1,21 @@
-import { HIDDEN_PRODUCT_TAG, SHOPIFY_GRAPHQL_API_ENDPOINT, TAGS } from 'lib/constants';
-import { isShopifyError } from 'lib/type-guards';
+import { SHOPIFY_GRAPHQL_API_ENDPOINT, TAGS } from 'lib/constants';
 import { ensureStartsWith } from 'lib/utils';
 import { revalidateTag } from 'next/cache';
 import { headers } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  addToCartMutation,
-  createCartMutation,
-  editCartItemsMutation,
-  removeFromCartMutation
-} from './mutations/cart';
-import { getCartQuery } from './queries/cart';
-import {
-  getCollectionProductsQuery,
-  getCollectionQuery,
-  getCollectionsQuery
-} from './queries/collection';
-import { getMenuQuery } from './queries/menu';
-import { getPageQuery, getPagesQuery } from './queries/page';
-import {
-  getProductQuery,
-  getProductRecommendationsQuery,
-  getProductsQuery
-} from './queries/product';
+import { reshapeCart } from './reshape';
 import {
   Cart,
   Collection,
-  Connection,
+  FourthwallProduct,
+  FourthwallProductImage,
+  FourthwallProductVariant,
   Image,
   Menu,
   Page,
   Product,
-  ShopifyAddToCartOperation,
-  ShopifyCart,
-  ShopifyCartOperation,
-  ShopifyCollection,
-  ShopifyCollectionOperation,
-  ShopifyCollectionProductsOperation,
-  ShopifyCollectionsOperation,
-  ShopifyCreateCartOperation,
-  ShopifyMenuOperation,
-  ShopifyPageOperation,
-  ShopifyPagesOperation,
-  ShopifyProduct,
-  ShopifyProductOperation,
-  ShopifyProductRecommendationsOperation,
-  ShopifyProductsOperation,
-  ShopifyRemoveFromCartOperation,
-  ShopifyUpdateCartOperation
+  ProductVariant,
+  ShopifyCollection
 } from './types';
 
 const domain = process.env.SHOPIFY_STORE_DOMAIN
@@ -58,79 +26,116 @@ const key = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN!;
 
 type ExtractVariables<T> = T extends { variables: object } ? T['variables'] : never;
 
-export async function shopifyFetch<T>({
-  cache = 'force-cache',
-  headers,
-  query,
-  tags,
-  variables
-}: {
-  cache?: RequestCache;
-  headers?: HeadersInit;
-  query: string;
-  tags?: string[];
-  variables?: ExtractVariables<T>;
-}): Promise<{ status: number; body: T } | never> {
+// export async function shopifyFetch<T>({
+//   cache = 'force-cache',
+//   headers,
+//   query,
+//   tags,
+//   variables
+// }: {
+//   cache?: RequestCache;
+//   headers?: HeadersInit;
+//   query: string;
+//   tags?: string[];
+//   variables?: ExtractVariables<T>;
+// }): Promise<{ status: number; body: T } | never> {
+//   try {
+//     const result = await fetch(endpoint, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'X-Shopify-Storefront-Access-Token': key,
+//         ...headers
+//       },
+//       body: JSON.stringify({
+//         ...(query && { query }),
+//         ...(variables && { variables })
+//       }),
+//       cache,
+//       ...(tags && { next: { tags } })
+//     });
+
+//     const body = await result.json();
+
+//     if (body.errors) {
+//       throw body.errors[0];
+//     }
+
+//     return {
+//       status: result.status,
+//       body
+//     };
+//   } catch (e) {
+//     if (isShopifyError(e)) {
+//       throw {
+//         cause: e.cause?.toString() || 'unknown',
+//         status: e.status || 500,
+//         message: e.message,
+//         query
+//       };
+//     }
+
+//     throw {
+//       error: e,
+//       query
+//     };
+//   }
+// }
+
+export async function fourthwallGet<T>(url: string, options: RequestInit = {}): Promise<{ status: number; body: T }> {
   try {
-    const result = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Storefront-Access-Token': key,
-        ...headers
-      },
-      body: JSON.stringify({
-        ...(query && { query }),
-        ...(variables && { variables })
-      }),
-      cache,
-      ...(tags && { next: { tags } })
-    });
+    const result = await fetch(
+      url,
+      {
+        method: 'GET',
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      }
+    );
 
     const body = await result.json();
-
-    if (body.errors) {
-      throw body.errors[0];
-    }
 
     return {
       status: result.status,
       body
     };
   } catch (e) {
-    if (isShopifyError(e)) {
-      throw {
-        cause: e.cause?.toString() || 'unknown',
-        status: e.status || 500,
-        message: e.message,
-        query
-      };
-    }
-
     throw {
       error: e,
-      query
+      url
     };
   }
 }
 
-const removeEdgesAndNodes = <T>(array: Connection<T>): T[] => {
-  return array.edges.map((edge) => edge?.node);
-};
+export async function fourthwallPost<T>(url: string, data: any, options: RequestInit = {}): Promise<{ status: number; body: T }> {
+  try {
+    const result = await fetch(url, {
+      method: 'POST',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      body: JSON.stringify(data)
+    });
 
-const reshapeCart = (cart: ShopifyCart): Cart => {
-  if (!cart.cost?.totalTaxAmount) {
-    cart.cost.totalTaxAmount = {
-      amount: '0.0',
-      currencyCode: 'USD'
+    const body = await result.json();
+
+    return {
+      status: result.status,
+      body
+    };
+  } catch (e) {
+    throw {
+      error: e,
+      url,
+      data
     };
   }
-
-  return {
-    ...cart,
-    lines: removeEdgesAndNodes(cart.lines)
-  };
-};
+}
 
 const reshapeCollection = (collection: ShopifyCollection): Collection | undefined => {
   if (!collection) {
@@ -159,20 +164,18 @@ const reshapeCollections = (collections: ShopifyCollection[]) => {
   return reshapedCollections;
 };
 
-const reshapeImages = (images: Connection<Image>, productTitle: string) => {
-  const flattened = removeEdgesAndNodes(images);
-
-  return flattened.map((image) => {
+const reshapeImages = (images: FourthwallProductImage[], productTitle: string): Image[] => {
+  return images.map((image) => {
     const filename = image.url.match(/.*\/(.*)\..*/)?.[1];
     return {
       ...image,
-      altText: image.altText || `${productTitle} - ${filename}`
+      altText: `${productTitle} - ${filename}`
     };
   });
 };
 
-const reshapeProduct = (product: ShopifyProduct, filterHiddenProducts: boolean = true) => {
-  if (!product || (filterHiddenProducts && product.tags.includes(HIDDEN_PRODUCT_TAG))) {
+const reshapeProduct = (product: FourthwallProduct): Product | undefined => {
+  if (!product) {
     return undefined;
   }
 
@@ -180,12 +183,22 @@ const reshapeProduct = (product: ShopifyProduct, filterHiddenProducts: boolean =
 
   return {
     ...rest,
-    images: reshapeImages(images, product.title),
-    variants: removeEdgesAndNodes(variants)
+    images: reshapeImages(images, product.name),
+    variants: reshapeVariants(variants)
   };
 };
 
-const reshapeProducts = (products: ShopifyProduct[]) => {
+const reshapeVariants = (variants: FourthwallProductVariant[]): ProductVariant[] => {
+  return variants.map((v) => ({
+    id: v.id,
+    title: v.name,
+    availableForSale: true,
+    selectedOptions: [],
+    price: v.unitPrice,
+  }))
+}
+
+const reshapeProducts = (products: FourthwallProduct[]) => {
   const reshapedProducts = [];
 
   for (const product of products) {
@@ -202,56 +215,69 @@ const reshapeProducts = (products: ShopifyProduct[]) => {
 };
 
 export async function createCart(): Promise<Cart> {
-  const res = await shopifyFetch<ShopifyCreateCartOperation>({
-    query: createCartMutation,
-    cache: 'no-store'
+  const res = await fourthwallPost(`https://api.staging.fourthwall.com/api/public/v1.0/carts?secret=${process.env.FW_SECRET}`, {
+    items: []
+  }, {
+    headers: {
+      'X-ShopId': process.env.FW_SHOPID
+    }
   });
 
-  return reshapeCart(res.body.data.cartCreate.cart);
+  console.warn('CART', res)
+
+  return reshapeCart(res.body);
 }
 
 export async function addToCart(
   cartId: string,
-  lines: { merchandiseId: string; quantity: number }[]
+  lines: { variantId: string; quantity: number }[]
 ): Promise<Cart> {
-  const res = await shopifyFetch<ShopifyAddToCartOperation>({
-    query: addToCartMutation,
-    variables: {
-      cartId,
-      lines
+  console.warn('LL', lines);
+  const res = await fourthwallPost(`${process.env.FW_URL}/api/public/v1.0/carts/${cartId}/add?secret=${process.env.FW_SECRET}`, {
+    items: lines
+  }, {
+    headers: {
+      'X-ShopId': 'sh_cd2b09e6-094a-4986-971f-cef77df19d0a'
     },
-    cache: 'no-store'
+    cache: 'no-store'    
   });
-  return reshapeCart(res.body.data.cartLinesAdd.cart);
+
+  console.warn('ADDED', res)
+
+  return reshapeCart(res.body);
 }
 
-export async function removeFromCart(cartId: string, lineIds: string[]): Promise<Cart> {
-  const res = await shopifyFetch<ShopifyRemoveFromCartOperation>({
-    query: removeFromCartMutation,
-    variables: {
-      cartId,
-      lineIds
+export async function removeFromCart(cartId: string, variantIds: string[]): Promise<Cart> {
+  const res = await fourthwallPost(`${process.env.FW_URL}/api/public/v1.0/carts/${cartId}/remove?secret=${process.env.FW_SECRET}`, {
+    items: variantIds.map((variantId) => ({
+      variantId
+    })),
+  }, {
+    headers: {
+      'X-ShopId': 'sh_cd2b09e6-094a-4986-971f-cef77df19d0a'
     },
     cache: 'no-store'
   });
 
-  return reshapeCart(res.body.data.cartLinesRemove.cart);
+  return reshapeCart(res.body);
 }
 
 export async function updateCart(
   cartId: string,
-  lines: { id: string; merchandiseId: string; quantity: number }[]
+  lines: { variantId: string; quantity: number }[]
 ): Promise<Cart> {
-  const res = await shopifyFetch<ShopifyUpdateCartOperation>({
-    query: editCartItemsMutation,
-    variables: {
-      cartId,
-      lines
+  console.warn('UPDATING', lines);
+
+  const res = await fourthwallPost(`${process.env.FW_URL}/api/public/v1.0/carts/${cartId}/change?secret=${process.env.FW_SECRET}`, {
+    items: lines,
+  }, {
+    headers: {
+      'X-ShopId': 'sh_cd2b09e6-094a-4986-971f-cef77df19d0a'
     },
     cache: 'no-store'
   });
 
-  return reshapeCart(res.body.data.cartLinesUpdate.cart);
+  return reshapeCart(res.body);
 }
 
 export async function getCart(cartId: string | undefined): Promise<Cart | undefined> {
@@ -259,30 +285,23 @@ export async function getCart(cartId: string | undefined): Promise<Cart | undefi
     return undefined;
   }
 
-  const res = await shopifyFetch<ShopifyCartOperation>({
-    query: getCartQuery,
-    variables: { cartId },
-    tags: [TAGS.cart]
+  const res = await fourthwallGet(`${process.env.FW_URL}/api/public/v1.0/carts/${cartId}?secret=${process.env.FW_SECRET}`, {
+    cache: 'no-store'
   });
 
-  // Old carts becomes `null` when you checkout.
-  if (!res.body.data.cart) {
-    return undefined;
-  }
-
-  return reshapeCart(res.body.data.cart);
+  return reshapeCart(res.body);
 }
 
 export async function getCollection(handle: string): Promise<Collection | undefined> {
-  const res = await shopifyFetch<ShopifyCollectionOperation>({
-    query: getCollectionQuery,
-    tags: [TAGS.collections],
-    variables: {
-      handle
+  const res1 = await fourthwallGet(`${process.env.FW_URL}/api/public/v1.0/collections?secret=${process.env.FW_SECRET}`, {
+    headers: {
+      'X-ShopId': 'sh_cd2b09e6-094a-4986-971f-cef77df19d0a'
     }
-  });
+  })
+  console.warn('res1', res1)
+  // const res = await fourthwallGet(`/api/public/v1.0/collections/${handle}`)
 
-  return reshapeCollection(res.body.data.collection);
+  return reshapeCollection(res1.body.collection);
 }
 
 export async function getCollectionProducts({
@@ -294,30 +313,26 @@ export async function getCollectionProducts({
   reverse?: boolean;
   sortKey?: string;
 }): Promise<Product[]> {
-  const res = await shopifyFetch<ShopifyCollectionProductsOperation>({
-    query: getCollectionProductsQuery,
-    tags: [TAGS.collections, TAGS.products],
-    variables: {
-      handle: collection,
-      reverse,
-      sortKey: sortKey === 'CREATED_AT' ? 'CREATED' : sortKey
+  const res = await fourthwallGet(`${process.env.FW_URL}/api/public/v1.0/collections/${collection}/products?secret=${process.env.FW_SECRET}`, {
+    headers: {
+      'X-ShopId': 'sh_cd2b09e6-094a-4986-971f-cef77df19d0a'
     }
   });
 
-  if (!res.body.data.collection) {
+  if (!res.body.results) {
     console.log(`No collection found for \`${collection}\``);
     return [];
   }
 
-  return reshapeProducts(removeEdgesAndNodes(res.body.data.collection.products));
+
+  return reshapeProducts(res.body.results);
 }
 
 export async function getCollections(): Promise<Collection[]> {
-  const res = await shopifyFetch<ShopifyCollectionsOperation>({
-    query: getCollectionsQuery,
+  const res = await fourthwallGet('/api/public/v1.0/collections', {
     tags: [TAGS.collections]
   });
-  const shopifyCollections = removeEdgesAndNodes(res.body?.data?.collections);
+  const shopifyCollections = res.body.collections;
   const collections = [
     {
       handle: '',
@@ -340,65 +355,49 @@ export async function getCollections(): Promise<Collection[]> {
   return collections;
 }
 
+// Deprecate this
 export async function getMenu(handle: string): Promise<Menu[]> {
-  const res = await shopifyFetch<ShopifyMenuOperation>({
-    query: getMenuQuery,
-    tags: [TAGS.collections],
-    variables: {
-      handle
-    }
-  });
+  return [];
+  // const res = await fourthwallGet(`/api/public/v1.0/menus/${handle}`, {
+  //   tags: [TAGS.collections]
+  // });
 
-  return (
-    res.body?.data?.menu?.items.map((item: { title: string; url: string }) => ({
-      title: item.title,
-      path: item.url.replace(domain, '').replace('/collections', '/search').replace('/pages', '')
-    })) || []
-  );
+  // return (
+  //   res.body.menu.items.map((item: { title: string; url: string }) => ({
+  //     title: item.title,
+  //     path: item.url.replace(domain, '').replace('/collections', '/search').replace('/pages', '')
+  //   })) || []
+  // );
 }
 
 export async function getPage(handle: string): Promise<Page> {
-  const res = await shopifyFetch<ShopifyPageOperation>({
-    query: getPageQuery,
-    cache: 'no-store',
-    variables: { handle }
-  });
-
-  return res.body.data.pageByHandle;
-}
-
-export async function getPages(): Promise<Page[]> {
-  const res = await shopifyFetch<ShopifyPagesOperation>({
-    query: getPagesQuery,
+  const res = await fourthwallGet(`/api/public/v1.0/pages/${handle}`, {
     cache: 'no-store'
   });
 
-  return removeEdgesAndNodes(res.body.data.pages);
+  return res.body.page;
+}
+
+export async function getPages(): Promise<Page[]> {
+  const res = await fourthwallGet('/api/public/v1.0/pages', {
+    cache: 'no-store'
+  });
+
+  return res.body.pages;
 }
 
 export async function getProduct(handle: string): Promise<Product | undefined> {
-  const res = await shopifyFetch<ShopifyProductOperation>({
-    query: getProductQuery,
-    tags: [TAGS.products],
-    variables: {
-      handle
+  const res = await fourthwallGet(`${process.env.FW_URL}/api/public/v1.0/collections/${process.env.FW_COLLECTION}/products?secret=${process.env.FW_SECRET}`, {
+    headers: {
+      'X-ShopId': 'sh_cd2b09e6-094a-4986-971f-cef77df19d0a'
     }
   });
 
-  return reshapeProduct(res.body.data.product, false);
+  return res.body.results.filter((product) => {
+    return product.slug === handle
+  }).map((p: any) => reshapeProduct(p, false))[0];
 }
 
-export async function getProductRecommendations(productId: string): Promise<Product[]> {
-  const res = await shopifyFetch<ShopifyProductRecommendationsOperation>({
-    query: getProductRecommendationsQuery,
-    tags: [TAGS.products],
-    variables: {
-      productId
-    }
-  });
-
-  return reshapeProducts(res.body.data.productRecommendations);
-}
 
 export async function getProducts({
   query,
@@ -409,17 +408,16 @@ export async function getProducts({
   reverse?: boolean;
   sortKey?: string;
 }): Promise<Product[]> {
-  const res = await shopifyFetch<ShopifyProductsOperation>({
-    query: getProductsQuery,
-    tags: [TAGS.products],
-    variables: {
+  const res = await fourthwallGet('/api/public/v1.0/products', {
+    params: {
       query,
       reverse,
       sortKey
-    }
+    },
+    tags: [TAGS.products]
   });
 
-  return reshapeProducts(removeEdgesAndNodes(res.body.data.products));
+  return reshapeProducts(res.data.products);
 }
 
 // This is called from `app/api/revalidate.ts` so providers can control revalidation logic.

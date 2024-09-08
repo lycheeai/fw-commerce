@@ -32,7 +32,7 @@ export default function CartModal() {
     if (!cart) {
       createCartAndSetCookie();
     }
-  }, [cart]);
+  }, [cart, createCartAndSetCookie]);
 
   useEffect(() => {
     if (
@@ -46,6 +46,8 @@ export default function CartModal() {
       quantityRef.current = cart?.totalQuantity;
     }
   }, [isOpen, cart?.totalQuantity, quantityRef]);
+
+  console.warn('CART', cart);
 
   return (
     <>
@@ -82,7 +84,7 @@ export default function CartModal() {
                 </button>
               </div>
 
-              {!cart || cart.lines.length === 0 ? (
+              {!cart || cart.items.length === 0 ? (
                 <div className="mt-20 flex w-full flex-col items-center justify-center overflow-hidden">
                   <ShoppingCartIcon className="h-16" />
                   <p className="mt-6 text-center text-2xl font-bold">Your cart is empty.</p>
@@ -90,7 +92,7 @@ export default function CartModal() {
               ) : (
                 <div className="flex h-full flex-col justify-between overflow-hidden p-1">
                   <ul className="flex-grow overflow-auto py-4">
-                    {cart.lines
+                    {cart.items
                       .sort((a, b) =>
                         a.merchandise.product.title.localeCompare(b.merchandise.product.title)
                       )
@@ -104,7 +106,7 @@ export default function CartModal() {
                         });
 
                         const merchandiseUrl = createUrl(
-                          `/product/${item.merchandise.product.handle}`,
+                          `/product/${item.merchandise.product.id}`,
                           new URLSearchParams(merchandiseSearchParams)
                         );
 
@@ -124,10 +126,10 @@ export default function CartModal() {
                                     width={64}
                                     height={64}
                                     alt={
-                                      item.merchandise.product.featuredImage.altText ||
-                                      item.merchandise.product.title
+                                      item.merchandise.product?.featuredImage?.altText ||
+                                      item.merchandise.product?.title
                                     }
-                                    src={item.merchandise.product.featuredImage.url}
+                                    src={item.merchandise.product.featuredImage?.url}
                                   />
                                 </div>
                                 <Link
@@ -150,8 +152,8 @@ export default function CartModal() {
                               <div className="flex h-16 flex-col justify-between">
                                 <Price
                                   className="flex justify-end space-y-2 text-right text-sm"
-                                  amount={item.cost.totalAmount.amount}
-                                  currencyCode={item.cost.totalAmount.currencyCode}
+                                  amount={item.cost?.totalAmount.value}
+                                  currencyCode={item.cost?.totalAmount.currencyCode}
                                 />
                                 <div className="ml-auto flex h-9 flex-row items-center rounded-full border border-neutral-200 dark:border-neutral-700">
                                   <EditItemQuantityButton
@@ -177,11 +179,7 @@ export default function CartModal() {
                   <div className="py-4 text-sm text-neutral-500 dark:text-neutral-400">
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 dark:border-neutral-700">
                       <p>Taxes</p>
-                      <Price
-                        className="text-right text-base text-black dark:text-white"
-                        amount={cart.cost.totalTaxAmount.amount}
-                        currencyCode={cart.cost.totalTaxAmount.currencyCode}
-                      />
+                      <p className="text-right">Calculated at checkout</p>
                     </div>
                     <div className="mb-3 flex items-center justify-between border-b border-neutral-200 pb-1 pt-1 dark:border-neutral-700">
                       <p>Shipping</p>
@@ -191,7 +189,7 @@ export default function CartModal() {
                       <p>Total</p>
                       <Price
                         className="text-right text-base text-black dark:text-white"
-                        amount={cart.cost.totalAmount.amount}
+                        amount={cart.cost.totalAmount.value}
                         currencyCode={cart.cost.totalAmount.currencyCode}
                       />
                     </div>

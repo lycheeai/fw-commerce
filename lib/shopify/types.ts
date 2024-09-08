@@ -8,8 +8,11 @@ export type Edge<T> = {
   node: T;
 };
 
-export type Cart = Omit<ShopifyCart, 'lines'> & {
-  lines: CartItem[];
+export type Cart = Omit<FourthwallCart, 'items'> & {
+  items: CartItem[];
+  cost: {
+    totalAmount: Money;
+  };
 };
 
 export type CartProduct = {
@@ -53,7 +56,7 @@ export type Menu = {
 };
 
 export type Money = {
-  amount: string;
+  value: number;
   currencyCode: string;
 };
 
@@ -68,7 +71,7 @@ export type Page = {
   updatedAt: string;
 };
 
-export type Product = Omit<ShopifyProduct, 'variants' | 'images'> & {
+export type Product = Omit<FourthwallProduct, 'variants' | 'images'> & {
   variants: ProductVariant[];
   images: Image[];
 };
@@ -95,16 +98,20 @@ export type SEO = {
   description: string;
 };
 
-export type ShopifyCart = {
+export type FourthwallCart = {
   id: string | undefined;
-  checkoutUrl: string;
-  cost: {
-    subtotalAmount: Money;
-    totalAmount: Money;
-    totalTaxAmount: Money;
-  };
-  lines: Connection<CartItem>;
-  totalQuantity: number;
+  // checkoutUrl: string;
+  // cost: {
+  //   subtotalAmount: Money;
+  //   totalAmount: Money;
+  //   totalTaxAmount: Money;
+  // };
+  items: FourthwallCartItem[];
+};
+
+export type FourthwallCartItem = {
+  variant: FourthwallProductVariant;
+  quantity: number;
 };
 
 export type ShopifyCollection = {
@@ -113,6 +120,34 @@ export type ShopifyCollection = {
   description: string;
   seo: SEO;
   updatedAt: string;
+};
+
+export type FourthwallProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+
+  images: FourthwallProductImage[];
+  variants: FourthwallProductVariant[];
+};
+
+export type FourthwallProductImage = {
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+};
+
+export type FourthwallProductVariant = {
+  id: string;
+  name: string;
+  sku: string;
+  unitPrice: Money;
+
+  images: FourthwallProductImage[];
+
+  // other attr
 };
 
 export type ShopifyProduct = {
@@ -137,7 +172,7 @@ export type ShopifyProduct = {
 
 export type ShopifyCartOperation = {
   data: {
-    cart: ShopifyCart;
+    cart: FourthwallCart;
   };
   variables: {
     cartId: string;
@@ -145,13 +180,13 @@ export type ShopifyCartOperation = {
 };
 
 export type ShopifyCreateCartOperation = {
-  data: { cartCreate: { cart: ShopifyCart } };
+  data: { cartCreate: { cart: FourthwallCart } };
 };
 
 export type ShopifyAddToCartOperation = {
   data: {
     cartLinesAdd: {
-      cart: ShopifyCart;
+      cart: FourthwallCart;
     };
   };
   variables: {
@@ -166,7 +201,7 @@ export type ShopifyAddToCartOperation = {
 export type ShopifyRemoveFromCartOperation = {
   data: {
     cartLinesRemove: {
-      cart: ShopifyCart;
+      cart: FourthwallCart;
     };
   };
   variables: {
@@ -178,7 +213,7 @@ export type ShopifyRemoveFromCartOperation = {
 export type ShopifyUpdateCartOperation = {
   data: {
     cartLinesUpdate: {
-      cart: ShopifyCart;
+      cart: FourthwallCart;
     };
   };
   variables: {
