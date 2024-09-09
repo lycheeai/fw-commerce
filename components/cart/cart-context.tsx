@@ -84,7 +84,6 @@ function updateCartTotals(lines: CartItem[]): Pick<Cart, 'totalQuantity' | 'cost
     cost: {
       subtotalAmount: { amount: totalAmount.toString(), currencyCode },
       totalAmount: { amount: totalAmount.toString(), currencyCode },
-      totalTaxAmount: { amount: '0', currencyCode }
     }
   };
 }
@@ -98,7 +97,6 @@ function createEmptyCart(): Cart {
     cost: {
       subtotalAmount: { amount: '0', currencyCode: 'USD' },
       totalAmount: { amount: '0', currencyCode: 'USD' },
-      totalTaxAmount: { amount: '0', currencyCode: 'USD' }
     }
   };
 }
@@ -147,7 +145,7 @@ function cartReducer(state: Cart | undefined, action: CartAction): Cart {
 
 export function CartProvider({
   children,
-  cartPromise
+  cartPromise,
 }: {
   children: React.ReactNode;
   cartPromise: Promise<Cart | undefined>;
